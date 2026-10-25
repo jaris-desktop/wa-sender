@@ -1,0 +1,36 @@
+# Daily: catch a WhatsApp-side change before schools do.
+#  - qr: a fresh device must still get a pairing QR (links nothing).
+#  - send: on the vendor's runner with a linked test number, send one message to a
+#    second test number. Skipped unless the runner and secrets exist.
+name: canary
+on:
+  schedule: [{ cron: '30 1 * * *' }]
+  workflow_dispatch:
+permissions:
+  contents: read
+  issues: write
+jobs:
+  qr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version-file: go.mod }
+      - run: WA_SENDER_LIVE=1 go test -run TestLivePairingQR -count=1 ./...
+  send:
+    if: vars.CANARY_SEND == '1'
+    runs-on: [self-hosted, wa-canary]
+    steps:
+      - uses: actions/checkout@v4
+      - run: go test -run TestLiveSend -count=1 ./...
+        env:
+          WA_SENDER_LIVE_STORE: ${{ secrets.CANARY_STORE_PATH }}
+          WA_SENDER_LIVE_STORE_KEY: ${{ secrets.CANARY_STORE_KEY }}
+          WA_SENDER_LIVE_TO: ${{ secrets.CANARY_TO }}
+  report:
+    needs: [qr, send]
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - env: { GH_TOKEN: '${{ github.token }}' }
+        run: gh issue create -R "$GITHUB_REPOSITORY" --title "Canary failed $(date +%F)" --body "See $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID — release a fix before schools hit it."

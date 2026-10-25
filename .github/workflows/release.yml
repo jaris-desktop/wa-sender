@@ -1,0 +1,70 @@
+# Tag vX.Y.Z → build every platform, sign the Windows binaries, write the signed
+# feed (index.json + index.json.sig) and publish them with the source on the
+# release. Jaris Desktop installs from releases/latest/download/index.json.
+name: release
+on:
+  push:
+    tags: ['v*.*.*']
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version-file: go.mod }
+      - run: go test -race ./...
+      - name: Build
+        run: |
+          v=${GITHUB_REF_NAME#v}
+          mkdir -p dist
+          for t in windows/amd64 windows/arm64 linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
+            os=${t%/*}; arch=${t#*/}; ext=""; [ "$os" = windows ] && ext=.exe
+            GOOS=$os GOARCH=$arch CGO_ENABLED=0 go build -trimpath \
+              -ldflags "-s -w -X main.version=$v -X main.commit=$GITHUB_SHA" \
+              -o dist/wa-sender-$os-$arch$ext .
+          done
+      - uses: actions/upload-artifact@v4
+        with: { name: dist, path: dist, retention-days: 1 }
+  sign-windows:
+    # The Authenticode certificate lives on the vendor's signing PC (an
+    # organisation runner labelled jaris-sign). Skipped when the variable is unset.
+    if: vars.WIN_SIGN_SHA1 != ''
+    needs: build
+    runs-on: [self-hosted, windows, jaris-sign]
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: dist, path: dist }
+      - shell: pwsh
+        run: |
+          foreach ($f in Get-ChildItem dist\*.exe) {
+            signtool sign /sha1 "${{ vars.WIN_SIGN_SHA1 }}" /fd sha256 /tr http://time.certum.pl /td sha256 $f.FullName
+          }
+      - uses: actions/upload-artifact@v4
+        with: { name: dist, path: dist, overwrite: true, retention-days: 1 }
+  publish:
+    needs: [build, sign-windows]
+    if: always() && needs.build.result == 'success' && needs.sign-windows.result != 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version-file: go.mod }
+      - uses: actions/download-artifact@v4
+        with: { name: dist, path: dist }
+      - name: Signed feed
+        env:
+          WA_EXT_SIGNING_KEY: ${{ secrets.WA_EXT_SIGNING_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v=${GITHUB_REF_NAME#v}
+          gh release download --pattern index.json --output prev-index.json 2>/dev/null || echo '{"name":"wa-sender","releases":[]}' > prev-index.json
+          go run ./cmd/mkindex -version "$v" -min-jaris "$(cat MIN_JARIS)" -dist dist \
+            -base-url "https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME" \
+            -source "https://github.com/$GITHUB_REPOSITORY/tree/$GITHUB_REF_NAME" -prev prev-index.json -out dist
+      - name: Publish
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes "Source: https://github.com/$GITHUB_REPOSITORY/tree/$GITHUB_REF_NAME" \
+            dist/wa-sender-* dist/index.json dist/index.json.sig LICENSE PROTOCOL.md

@@ -1,0 +1,27 @@
+# Weekly: move to the newest whatsmeow and open a PR when the tests (and the live
+# QR canary) still pass. Merging + tagging ships it to every Jaris PC.
+name: update-whatsmeow
+on:
+  schedule: [{ cron: '0 2 * * 1' }]
+  workflow_dispatch:
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version-file: go.mod }
+      - run: go get go.mau.fi/whatsmeow@latest && go mod tidy
+      - run: go vet ./... && go test -race ./...
+      - run: WA_SENDER_LIVE=1 go test -run TestLivePairingQR -count=1 ./...
+      - name: Open a PR
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          git diff --quiet go.mod go.sum && { echo "already current"; exit 0; }
+          b=bump-whatsmeow-$(date +%Y%m%d)
+          git config user.name "wa-sender bot"; git config user.email "bot@users.noreply.github.com"
+          git checkout -b "$b" && git commit -am "build(deps): update whatsmeow" && git push -u origin "$b"
+          gh pr create --title "build(deps): update whatsmeow" --body "Automated weekly update; tests and the live QR canary passed."
