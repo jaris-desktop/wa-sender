@@ -43,7 +43,7 @@ const (
 
 const (
 	pairTimeout = 3 * time.Minute
-	sendTimeout = 60 * time.Second
+	sendTimeout = 45 * time.Second // the host waits 50 s: answer before it gives up
 	// pairDisplayName is what the phone lists under "Linked devices"; WhatsApp only
 	// accepts "Browser (OS)" with common browsers.
 	pairDisplayName = "Chrome (Linux)"
