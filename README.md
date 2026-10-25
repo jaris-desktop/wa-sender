@@ -37,5 +37,5 @@ WA_SENDER_LIVE=1 go test -run TestLivePairingQR ./...   # reaches WhatsApp, link
    and, for Windows Authenticode, the `WIN_SIGN_SHA1` variable plus the `jaris-sign`
    runner.
 
-`update-whatsmeow.yml` opens a weekly PR moving to the newest whatsmeow; `canary.yml`
-checks every day that WhatsApp still accepts this version.
+`update-whatsmeow.yml` opens a weekly PR moving to the newest whatsmeow once the tests
+and the live pairing-QR check pass.

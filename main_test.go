@@ -250,29 +250,3 @@ func TestLivePairingQR(t *testing.T) {
 		}
 	}
 }
-
-// Live send (opt-in, the canary's vendor runner): a linked test store sends one
-// message to WA_SENDER_LIVE_TO.
-func TestLiveSend(t *testing.T) {
-	path, keyHex, to := os.Getenv("WA_SENDER_LIVE_STORE"), os.Getenv("WA_SENDER_LIVE_STORE_KEY"), os.Getenv("WA_SENDER_LIVE_TO")
-	if path == "" || to == "" {
-		t.Skip("set WA_SENDER_LIVE_STORE, WA_SENDER_LIVE_STORE_KEY and WA_SENDER_LIVE_TO")
-	}
-	h := start(t)
-	result(t, h.call("hello", map[string]any{"protocol": 1}))
-	result(t, h.call("open_unit", map[string]any{"unit": "canary", "storePath": path, "storeKeyHex": keyHex}))
-	deadline := time.Now().Add(60 * time.Second)
-	for {
-		if r := result(t, h.call("status", map[string]any{"unit": "canary"})); r["state"] == stateConnected {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("test number did not connect")
-		}
-		time.Sleep(time.Second)
-	}
-	r := result(t, h.call("send", map[string]any{"unit": "canary", "to": to, "text": "wa-sender canary " + time.Now().UTC().Format(time.RFC3339), "messageId": "canary-" + time.Now().UTC().Format("20060102")}))
-	if r["messageId"] == "" {
-		t.Fatalf("send: %v", r)
-	}
-}

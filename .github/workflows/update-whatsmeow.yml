@@ -1,5 +1,5 @@
 # Weekly: move to the newest whatsmeow and open a PR when the tests (and the live
-# QR canary) still pass. Merging + tagging ships it to every Jaris PC.
+# pairing-QR check) still pass. Merging + tagging ships it to every Jaris PC.
 name: update-whatsmeow
 on:
   schedule: [{ cron: '0 2 * * 1' }]
@@ -24,4 +24,4 @@ jobs:
           b=bump-whatsmeow-$(date +%Y%m%d)
           git config user.name "wa-sender bot"; git config user.email "bot@users.noreply.github.com"
           git checkout -b "$b" && git commit -am "build(deps): update whatsmeow" && git push -u origin "$b"
-          gh pr create --title "build(deps): update whatsmeow" --body "Automated weekly update; tests and the live QR canary passed."
+          gh pr create --title "build(deps): update whatsmeow" --body "Automated weekly update; tests and the live pairing-QR check passed."
